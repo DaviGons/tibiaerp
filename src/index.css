@@ -1,0 +1,118 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply bg-tibia-dark text-gray-200 font-sans antialiased;
+    min-height: 100vh;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-tibia-deeper;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-tibia-border rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-tibia-gold/40;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-tibia-card/80 backdrop-blur-xl border border-tibia-border/50 rounded-xl shadow-card;
+  }
+
+  .glass-card-hover {
+    @apply glass-card transition-all duration-300 hover:bg-tibia-card-hover hover:border-tibia-gold/20 hover:shadow-glow-gold;
+  }
+
+  .btn-primary {
+    @apply px-6 py-2.5 bg-gradient-to-r from-tibia-gold to-yellow-500 text-tibia-dark font-semibold rounded-lg
+           transition-all duration-300 hover:shadow-glow-gold hover:scale-[1.02] active:scale-[0.98]
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-2.5 bg-tibia-card border border-tibia-border text-gray-200 font-medium rounded-lg
+           transition-all duration-300 hover:bg-tibia-card-hover hover:border-tibia-gold/30
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-danger {
+    @apply px-6 py-2.5 bg-tibia-red/20 border border-tibia-red/30 text-tibia-red font-medium rounded-lg
+           transition-all duration-300 hover:bg-tibia-red/30 hover:border-tibia-red/50
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-2.5 bg-tibia-deeper border border-tibia-border rounded-lg text-gray-200
+           placeholder:text-gray-500 transition-all duration-300
+           focus:outline-none focus:border-tibia-gold/50 focus:ring-1 focus:ring-tibia-gold/30 focus:shadow-glow-gold;
+  }
+
+  .label-text {
+    @apply block text-sm font-medium text-gray-400 mb-1.5;
+  }
+
+  .stat-value {
+    @apply text-2xl font-bold tracking-tight;
+  }
+
+  .stat-label {
+    @apply text-xs font-medium text-gray-500 uppercase tracking-wider;
+  }
+
+  .page-enter {
+    @apply animate-fade-in;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-profit {
+    @apply badge bg-tibia-green/15 text-tibia-green border border-tibia-green/20;
+  }
+
+  .badge-loss {
+    @apply badge bg-tibia-red/15 text-tibia-red border border-tibia-red/20;
+  }
+}
+
+/* Animated background pattern */
+.bg-grid-pattern {
+  background-image:
+    linear-gradient(rgba(245,166,35,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245,166,35,0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+/* Shimmer loading effect */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(26,26,46,0) 0%,
+    rgba(42,42,69,0.5) 50%,
+    rgba(26,26,46,0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
