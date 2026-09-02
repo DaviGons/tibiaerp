@@ -11,12 +11,14 @@ import {
   ChevronLeft,
   User,
   History,
+  Wrench,
 } from 'lucide-react'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/hunt-log', icon: ScrollText, label: 'Registrar Hunt' },
   { to: '/historico', icon: History, label: 'Histórico' },
+  { to: '/ferramentas', icon: Wrench, label: 'Ferramentas' },
 ]
 
 export default function Sidebar({ collapsed, onToggle }) {

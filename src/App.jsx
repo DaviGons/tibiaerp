@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import HuntLog from './pages/HuntLog'
 import Historico from './pages/Historico'
+import Ferramentas from './pages/Ferramentas'
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/hunt-log" element={<HuntLog />} />
             <Route path="/historico" element={<Historico />} />
+            <Route path="/ferramentas" element={<Ferramentas />} />
           </Route>
 
           {/* Catch all */}
