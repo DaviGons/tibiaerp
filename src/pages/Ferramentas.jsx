@@ -1,4 +1,4 @@
-import { useHuntTimer } from '../hooks/useHuntTimer'
+import { useHuntTimers } from '../hooks/useHuntTimers'
 import {
   Wrench,
   Timer,
@@ -7,6 +7,10 @@ import {
   Clock,
   Sparkles,
   Construction,
+  Plus,
+  X,
+  BellOff,
+  Tag,
 } from 'lucide-react'
 
 export default function Ferramentas() {
@@ -45,164 +49,268 @@ export default function Ferramentas() {
 
 function HuntTimerCard() {
   const {
-    minutes,
-    setMinutes,
-    isRunning,
-    isFinished,
-    start,
-    cancel,
-    formattedTime,
-    progress,
-  } = useHuntTimer()
+    timers,
+    addTimer,
+    removeTimer,
+    updateField,
+    startTimer,
+    cancelTimer,
+    stopAlarm,
+    getFormattedTime,
+    getProgress,
+  } = useHuntTimers()
+
+  return (
+    <div className="glass-card overflow-hidden flex flex-col md:col-span-2 xl:col-span-2">
+      {/* Card header */}
+      <div className="flex items-center justify-between p-5 border-b border-tibia-border/50">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-tibia-gold/15 flex items-center justify-center">
+            <Timer className="w-5 h-5 text-tibia-gold" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-gray-200">
+              Temporizador de Caçada
+            </h2>
+            <p className="text-xs text-gray-500">
+              Timers independentes para Plasma, Ring, Poções e mais
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => addTimer()}
+          className="btn-secondary !px-3 !py-2 flex items-center gap-1.5 text-xs"
+          title="Adicionar timer"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Adicionar</span>
+        </button>
+      </div>
+
+      {/* Timers list */}
+      <div className="divide-y divide-tibia-border/30">
+        {timers.map((timer) => (
+          <TimerRow
+            key={timer.id}
+            timer={timer}
+            formattedTime={getFormattedTime(timer)}
+            progress={getProgress(timer)}
+            onUpdateField={(field, value) => updateField(timer.id, field, value)}
+            onStart={() => startTimer(timer.id)}
+            onCancel={() => cancelTimer(timer.id)}
+            onStopAlarm={() => stopAlarm(timer.id)}
+            onRemove={() => removeTimer(timer.id)}
+            canRemove={timers.length > 1}
+          />
+        ))}
+      </div>
+
+      {/* Footer — quick-add hint */}
+      <div className="p-3 border-t border-tibia-border/30 bg-tibia-deeper/30">
+        <button
+          onClick={() => addTimer()}
+          className="w-full py-2 rounded-lg border border-dashed border-tibia-border/50 text-xs text-gray-500
+                     hover:border-tibia-gold/30 hover:text-gray-400 transition-all duration-200
+                     flex items-center justify-center gap-1.5"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Novo timer
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Individual Timer Row ─────────────────────────────────────────────────────
+
+function TimerRow({
+  timer,
+  formattedTime,
+  progress,
+  onUpdateField,
+  onStart,
+  onCancel,
+  onStopAlarm,
+  onRemove,
+  canRemove,
+}) {
+  const { isRunning, isFinished } = timer
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    start()
+    onStart()
   }
 
+  // ── Idle state ────────────────────────────────────────────────────────────
+  if (!isRunning && !isFinished) {
+    return (
+      <form
+        onSubmit={handleSubmit}
+        className="p-4 flex flex-col sm:flex-row items-stretch sm:items-end gap-3 animate-fade-in group/row hover:bg-tibia-card-hover/30 transition-colors"
+      >
+        {/* Name */}
+        <div className="flex-1 min-w-0">
+          <label className="label-text flex items-center gap-1">
+            <Tag className="w-3 h-3" />
+            Nome
+          </label>
+          <input
+            type="text"
+            placeholder="Ex: Poção, Colar..."
+            value={timer.name}
+            onChange={(e) => onUpdateField('name', e.target.value)}
+            className="input-field !py-2 text-sm"
+            autoComplete="off"
+          />
+        </div>
+
+        {/* Minutes */}
+        <div className="w-full sm:w-28">
+          <label className="label-text flex items-center gap-1">
+            <Clock className="w-3 h-3" />
+            Minutos
+          </label>
+          <input
+            type="number"
+            min="1"
+            max="999"
+            placeholder="15"
+            value={timer.minutes}
+            onChange={(e) => onUpdateField('minutes', e.target.value)}
+            className="input-field !py-2 text-sm text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            autoComplete="off"
+          />
+        </div>
+
+        {/* Preset buttons */}
+        <div className="flex gap-1.5 sm:pb-0">
+          {[
+            { label: '15', value: '15' },
+            { label: '30', value: '30' },
+            { label: '60', value: '60' },
+          ].map((p) => (
+            <button
+              key={p.value}
+              type="button"
+              onClick={() => onUpdateField('minutes', p.value)}
+              className={`px-2.5 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+                timer.minutes === p.value
+                  ? 'bg-tibia-gold/20 text-tibia-gold border border-tibia-gold/30'
+                  : 'bg-tibia-deeper text-gray-500 border border-tibia-border hover:text-gray-300 hover:border-tibia-gold/20'
+              }`}
+            >
+              {p.label}m
+            </button>
+          ))}
+        </div>
+
+        {/* Start */}
+        <button
+          type="submit"
+          disabled={!timer.minutes || Number(timer.minutes) <= 0}
+          className="btn-primary !px-4 !py-2 flex items-center justify-center gap-1.5 text-sm whitespace-nowrap"
+        >
+          <Play className="w-3.5 h-3.5" />
+          Iniciar
+        </button>
+
+        {/* Remove */}
+        {canRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="p-2 rounded-lg text-gray-600 hover:text-tibia-red hover:bg-tibia-red/10 transition-colors self-center sm:self-end"
+            title="Remover timer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </form>
+    )
+  }
+
+  // ── Running / Finished state ──────────────────────────────────────────────
   return (
-    <div className="glass-card overflow-hidden flex flex-col md:col-span-2 xl:col-span-1">
-      {/* Card header */}
-      <div className="flex items-center gap-3 p-5 border-b border-tibia-border/50">
-        <div className="w-10 h-10 rounded-xl bg-tibia-gold/15 flex items-center justify-center">
-          <Timer className="w-5 h-5 text-tibia-gold" />
-        </div>
-        <div>
-          <h2 className="text-base font-semibold text-gray-200">
-            Temporizador de Caçada
-          </h2>
-          <p className="text-xs text-gray-500">
-            Timer para Plasma, Ring e outros
-          </p>
-        </div>
-      </div>
-
-      {/* Timer display */}
-      <div className="flex-1 p-5 flex flex-col items-center justify-center">
-        {/* Circular progress ring */}
-        <div className="relative w-44 h-44 mb-5">
-          <svg className="w-full h-full -rotate-90" viewBox="0 0 160 160">
-            {/* Background ring */}
-            <circle
-              cx="80"
-              cy="80"
-              r="70"
-              fill="none"
-              stroke="currentColor"
-              className="text-tibia-border/30"
-              strokeWidth="6"
-            />
-            {/* Progress ring */}
-            <circle
-              cx="80"
-              cy="80"
-              r="70"
-              fill="none"
-              stroke="url(#timerGradient)"
-              strokeWidth="6"
-              strokeLinecap="round"
-              strokeDasharray={2 * Math.PI * 70}
-              strokeDashoffset={2 * Math.PI * 70 * (1 - progress)}
-              className="transition-[stroke-dashoffset] duration-500 ease-linear"
-            />
-            <defs>
-              <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#f5a623" />
-                <stop offset="100%" stopColor="#ffd700" />
-              </linearGradient>
-            </defs>
-          </svg>
-
-          {/* Center time display */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span
-              className={`text-4xl font-bold tracking-tight tabular-nums transition-colors duration-300 ${
-                isFinished
-                  ? 'text-tibia-green animate-pulse'
-                  : isRunning
-                    ? 'text-tibia-gold-light'
-                    : 'text-gray-400'
-              }`}
-            >
-              {formattedTime}
+    <div
+      className={`p-4 animate-fade-in transition-colors ${
+        isFinished ? 'bg-tibia-red/5' : 'hover:bg-tibia-card-hover/30'
+      }`}
+    >
+      <div className="flex items-center gap-4">
+        {/* Timer info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            {timer.name ? (
+              <span className="text-sm font-semibold text-gray-200 truncate">
+                {timer.name}
+              </span>
+            ) : (
+              <span className="text-sm font-medium text-gray-500 italic truncate">
+                Timer
+              </span>
+            )}
+            <span className="text-[10px] text-gray-600">
+              {timer.minutes} min
             </span>
-            {isRunning && (
-              <span className="text-[10px] text-gray-500 uppercase tracking-widest mt-1 animate-fade-in">
-                em andamento
-              </span>
-            )}
-            {isFinished && (
-              <span className="text-[10px] text-tibia-green uppercase tracking-widest mt-1 animate-fade-in">
-                concluído!
-              </span>
-            )}
+          </div>
+
+          {/* Progress bar */}
+          <div className="h-1.5 bg-tibia-deeper rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ease-linear ${
+                isFinished
+                  ? 'bg-tibia-red animate-pulse'
+                  : 'bg-gradient-to-r from-tibia-gold to-tibia-gold-light'
+              }`}
+              style={{ width: `${Math.min(100, progress * 100)}%` }}
+            />
           </div>
         </div>
 
-        {/* Input & controls */}
-        {!isRunning && !isFinished ? (
-          <form onSubmit={handleSubmit} className="w-full max-w-xs space-y-3 animate-fade-in">
-            <div className="relative">
-              <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
-              <input
-                id="hunt-timer-minutes"
-                type="number"
-                min="1"
-                max="999"
-                placeholder="Minutos (ex: 15)"
-                value={minutes}
-                onChange={(e) => setMinutes(e.target.value)}
-                className="input-field pl-10 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                autoComplete="off"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={!minutes || Number(minutes) <= 0}
-              className="btn-primary w-full flex items-center justify-center gap-2"
-            >
-              <Play className="w-4 h-4" />
-              Iniciar
-            </button>
+        {/* Countdown */}
+        <span
+          className={`text-2xl font-bold tabular-nums tracking-tight transition-colors duration-300 flex-shrink-0 ${
+            isFinished
+              ? 'text-tibia-red animate-pulse'
+              : 'text-tibia-gold-light'
+          }`}
+        >
+          {formattedTime}
+        </span>
 
-            {/* Quick presets */}
-            <div className="flex gap-2 justify-center pt-1">
-              {[
-                { label: '15 min', value: '15' },
-                { label: '30 min', value: '30' },
-                { label: '60 min', value: '60' },
-              ].map((preset) => (
-                <button
-                  key={preset.value}
-                  type="button"
-                  onClick={() => setMinutes(preset.value)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                    minutes === preset.value
-                      ? 'bg-tibia-gold/20 text-tibia-gold border border-tibia-gold/30'
-                      : 'bg-tibia-deeper text-gray-500 border border-tibia-border hover:text-gray-300 hover:border-tibia-gold/20'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-          </form>
+        {/* Action button */}
+        {isFinished ? (
+          <button
+            onClick={onStopAlarm}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold
+                       bg-tibia-red/20 border border-tibia-red/40 text-tibia-red
+                       hover:bg-tibia-red/30 hover:border-tibia-red/60
+                       transition-all duration-200 animate-pulse whitespace-nowrap"
+          >
+            <BellOff className="w-4 h-4" />
+            Parar Alarme
+          </button>
         ) : (
-          <div className="w-full max-w-xs animate-fade-in">
-            <button
-              onClick={() => {
-                cancel()
-              }}
-              className={`w-full flex items-center justify-center gap-2 ${
-                isFinished ? 'btn-primary' : 'btn-danger'
-              }`}
-            >
-              <Square className="w-4 h-4" />
-              {isFinished ? 'Novo Timer' : 'Cancelar'}
-            </button>
-          </div>
+          <button
+            onClick={onCancel}
+            className="btn-danger !px-3 !py-2 flex items-center gap-1.5 text-sm whitespace-nowrap"
+          >
+            <Square className="w-3.5 h-3.5" />
+            Cancelar
+          </button>
         )}
       </div>
+
+      {/* Finished label */}
+      {isFinished && (
+        <div className="mt-2 flex items-center gap-1.5 animate-fade-in">
+          <span className="inline-block w-2 h-2 rounded-full bg-tibia-red animate-pulse" />
+          <span className="text-xs text-tibia-red font-medium uppercase tracking-wider">
+            Tempo esgotado — alarme tocando
+          </span>
+        </div>
+      )}
     </div>
   )
 }
