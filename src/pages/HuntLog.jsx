@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { parseHuntLog, formatGold } from '../utils/parseHuntLog'
+import { parseHuntLog, formatGold, parseDurationToHours } from '../utils/parseHuntLog'
 import { useHunts } from '../hooks/useHunts'
+import ExtraCostsSection from '../components/ExtraCostsSection'
 import {
   ScrollText,
   ClipboardPaste,
@@ -19,6 +20,8 @@ import {
   Scale,
   Clock,
   User,
+  Layers,
+  Sparkles,
 } from 'lucide-react'
 
 export default function HuntLog() {
@@ -26,10 +29,52 @@ export default function HuntLog() {
   const [location, setLocation] = useState('')
   const [huntDate, setHuntDate] = useState('')
   const [parsedData, setParsedData] = useState(null)
+  const [extraCosts, setExtraCosts] = useState([])
   const [parseError, setParseError] = useState('')
   const [saveSuccess, setSaveSuccess] = useState(false)
   const { createHunt, loading } = useHunts()
   const navigate = useNavigate()
+
+  // Extract session duration string from parsed data or raw log
+  const huntDurationStr = useMemo(() => {
+    if (parsedData?.session?.duration) return parsedData.session.duration
+    if (!rawLog) return ''
+    const match = rawLog.match(/Session:\s*([^\r\n]+)/i)
+    if (match && !match[0].includes('Session data')) {
+      return match[1].trim()
+    }
+    return ''
+  }, [parsedData, rawLog])
+
+  const huntDurationHours = useMemo(() => {
+    return parseDurationToHours(huntDurationStr)
+  }, [huntDurationStr])
+
+  // Total extra supplies calculated from all fractionated cost rows
+  const totalExtraSupplies = useMemo(() => {
+    if (huntDurationHours <= 0) return 0
+    return Math.round(
+      extraCosts.reduce((acc, item) => {
+        const cost = Number(item.totalCost) || 0
+        const hours = Number(item.totalHours) || 0
+        if (hours > 0 && cost > 0) {
+          return acc + (huntDurationHours / hours) * cost
+        }
+        return acc
+      }, 0)
+    )
+  }, [extraCosts, huntDurationHours])
+
+  // Effective calculated values taking extra fractionated costs into account
+  const effectiveSupplies = useMemo(() => {
+    if (!parsedData) return 0
+    return (parsedData.totals.supplies || 0) + totalExtraSupplies
+  }, [parsedData, totalExtraSupplies])
+
+  const effectiveBalance = useMemo(() => {
+    if (!parsedData) return 0
+    return (parsedData.totals.loot || 0) - effectiveSupplies
+  }, [parsedData, effectiveSupplies])
 
   const handleParse = useCallback(() => {
     setParseError('')
@@ -58,6 +103,7 @@ export default function HuntLog() {
     setLocation('')
     setHuntDate('')
     setParsedData(null)
+    setExtraCosts([])
     setParseError('')
     setSaveSuccess(false)
   }
@@ -65,13 +111,27 @@ export default function HuntLog() {
   const handleSave = async () => {
     if (!parsedData) return
 
-    const { data, error } = await createHunt({
+    // Build extra costs summary to append to raw_log for transparent history
+    let enhancedRawLog = rawLog.trim()
+    if (extraCosts.length > 0 && totalExtraSupplies > 0) {
+      const extraLines = extraCosts
+        .filter((item) => Number(item.totalCost) > 0 && Number(item.totalHours) > 0)
+        .map((item) => {
+          const fracCost = Math.round((huntDurationHours / Number(item.totalHours)) * Number(item.totalCost))
+          return `  - ${item.name || 'Item'}: ${formatGold(fracCost)} gp (${huntDurationHours.toFixed(2)}h de ${item.totalHours}h | Recarga: ${formatGold(item.totalCost)} gp)`
+        })
+        .join('\n')
+
+      enhancedRawLog += `\n\n--- Custos Extras Fracionados (${huntDurationStr}) ---\n${extraLines}\nTotal Extras: ${formatGold(totalExtraSupplies)} gp\nSupplies do Log: ${formatGold(parsedData.totals.supplies)} gp\nSupplies Total Real: ${formatGold(effectiveSupplies)} gp\nLucro Real Ajustado: ${formatGold(effectiveBalance)} gp`
+    }
+
+    const { error } = await createHunt({
       location: location || parsedData.session?.lootType || 'Unknown',
       huntDate: huntDate || new Date().toISOString(),
       totalLoot: parsedData.totals.loot,
-      totalSupplies: parsedData.totals.supplies,
-      balance: parsedData.totals.balance,
-      rawLog,
+      totalSupplies: effectiveSupplies,
+      balance: effectiveBalance,
+      rawLog: enhancedRawLog,
     })
 
     if (error) {
@@ -123,6 +183,14 @@ export default function HuntLog() {
           placeholder={`Cole aqui o texto copiado do Party Hunt Analyzer...\n\nExemplo:\nSession data: From 2026-08-30, 21:00:00 to 2026-08-30, 22:30:00\nSession: 01:30h\nLoot Type: Market\nLoot: 1,500,500\nSupplies: 450,000\nBalance: 1,050,500`}
           rows={10}
           className="input-field font-mono text-sm resize-y min-h-[200px] leading-relaxed"
+        />
+
+        {/* Optional Fractionated Extra Costs Section */}
+        <ExtraCostsSection
+          extraCosts={extraCosts}
+          onChange={setExtraCosts}
+          huntDurationHours={huntDurationHours}
+          huntDurationStr={huntDurationStr}
         />
 
         {/* Metadata fields */}
@@ -229,18 +297,85 @@ export default function HuntLog() {
             <TotalCard
               icon={ShoppingCart}
               label="Total Supplies"
-              value={parsedData.totals.supplies}
+              value={effectiveSupplies}
+              subtext={
+                totalExtraSupplies > 0
+                  ? `Log: ${formatGold(parsedData.totals.supplies)} + Extras: ${formatGold(totalExtraSupplies)} gp`
+                  : null
+              }
               color="text-tibia-purple"
               bg="bg-tibia-purple/10"
             />
             <TotalCard
               icon={Scale}
-              label="Balance"
-              value={parsedData.totals.balance}
-              color={parsedData.totals.balance >= 0 ? 'text-tibia-green' : 'text-tibia-red'}
-              bg={parsedData.totals.balance >= 0 ? 'bg-tibia-green/10' : 'bg-tibia-red/10'}
+              label="Lucro Real (Balance)"
+              value={effectiveBalance}
+              subtext={
+                totalExtraSupplies > 0
+                  ? 'Já descontando imbuements e itens proporcionais'
+                  : null
+              }
+              color={effectiveBalance >= 0 ? 'text-tibia-green' : 'text-tibia-red'}
+              bg={effectiveBalance >= 0 ? 'bg-tibia-green/10' : 'bg-tibia-red/10'}
             />
           </div>
+
+          {/* Extra costs breakdown in preview if items exist */}
+          {extraCosts.length > 0 && totalExtraSupplies > 0 && (
+            <div className="glass-card overflow-hidden">
+              <div className="flex items-center justify-between p-4 border-b border-tibia-border/50 bg-tibia-purple/5">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-tibia-purple" />
+                  <h3 className="text-sm font-semibold text-gray-200">
+                    Detalhamento dos Custos Extras Fracionados
+                  </h3>
+                </div>
+                <span className="badge bg-tibia-purple/20 text-tibia-purple border border-tibia-purple/30 text-xs font-semibold">
+                  +{formatGold(totalExtraSupplies)} gp
+                </span>
+              </div>
+              <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {extraCosts
+                  .filter((item) => Number(item.totalCost) > 0 && Number(item.totalHours) > 0)
+                  .map((item) => {
+                    const cost = Number(item.totalCost)
+                    const hours = Number(item.totalHours)
+                    const fracCost = Math.round((huntDurationHours / hours) * cost)
+                    const percent = Math.min(100, (huntDurationHours / hours) * 100)
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="bg-tibia-deeper/70 border border-tibia-border/50 rounded-xl p-3 flex items-center gap-3"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-tibia-card border border-tibia-border flex items-center justify-center flex-shrink-0 overflow-hidden">
+                          {item.imageUrl ? (
+                            <img
+                              src={item.imageUrl}
+                              alt={item.name}
+                              className="w-7 h-7 object-contain"
+                            />
+                          ) : (
+                            <Shield className="w-4 h-4 text-gray-500" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-gray-200 truncate">
+                            {item.name || 'Item'}
+                          </p>
+                          <p className="text-[10px] text-gray-500">
+                            {huntDurationHours.toFixed(2)}h de {hours}h ({percent.toFixed(0)}%)
+                          </p>
+                          <p className="text-xs font-bold text-tibia-purple font-mono mt-0.5">
+                            +{formatGold(fracCost)} gp
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+              </div>
+            </div>
+          )}
 
           {/* Players */}
           {parsedData.players.length > 0 && (
@@ -307,17 +442,22 @@ export default function HuntLog() {
   )
 }
 
-function TotalCard({ icon: Icon, label, value, color, bg }) {
+function TotalCard({ icon: Icon, label, value, subtext, color, bg }) {
   return (
-    <div className="glass-card p-4 flex items-center gap-3">
-      <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center`}>
+    <div className="glass-card p-4 flex items-start gap-3">
+      <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center flex-shrink-0 mt-0.5`}>
         <Icon className={`w-5 h-5 ${color}`} />
       </div>
-      <div>
+      <div className="min-w-0 flex-1">
         <p className="stat-label">{label}</p>
         <p className={`text-lg font-bold ${color}`}>
           {formatGold(value)}<span className="text-xs font-normal text-gray-500 ml-1">gp</span>
         </p>
+        {subtext && (
+          <p className="text-[11px] text-gray-400 mt-1 leading-snug truncate" title={subtext}>
+            {subtext}
+          </p>
+        )}
       </div>
     </div>
   )
