@@ -20,13 +20,8 @@ import {
   Clock,
   User,
   Plus,
-  Coins,
-  Shield,
   Sparkles,
   Layers,
-  CheckSquare,
-  Square,
-  HelpCircle,
 } from 'lucide-react'
 
 export default function HuntLog() {
@@ -60,24 +55,17 @@ export default function HuntLog() {
   }, [characters, selectedCharId, activeCharacter])
 
   const silverTokenPrice = Number(selectedChar?.silver_token_price) || 0
-  const goldTokenPrice = Number(selectedChar?.gold_token_price) || 0
-  const tibiaCoinPrice = Number(selectedChar?.tibia_coin_price) || 0
 
-  // ─── Extra Costs Management ────────────────────────────────────────────────
+  // ─── Extra Costs Management (Silver Tokens Only) ───────────────────────────
 
-  const handleAddCost = (type = 'recarga') => {
+  const handleAddCost = () => {
     const newItem = {
       id: `cost_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      type, // 'recarga' | 'imbuement'
-      name: type === 'recarga' ? 'Collar of Blue Plasma' : 'Powerful Strike',
-      // Recarga fields (Silver Tokens)
+      name: '',
       silverTokens: 5,
       fullUsage: true,
-      fullCharge: 30, // ex: 30 minutes / charges
+      fullCharge: 30,
       remainingCharge: 0,
-      // Imbuement fields (Gold Tokens)
-      goldTokens: 6,
-      fixedFee: 150000, // 150k gp 100% success fee
     }
     setExtraCosts((prev) => [...prev, newItem])
   }
@@ -92,29 +80,25 @@ export default function HuntLog() {
     setExtraCosts((prev) => prev.filter((item) => item.id !== id))
   }
 
-  // Calculate individual cost for a row
+  // Calculate cost for each item based on Silver Tokens and proportional usage
   const calculateItemCost = useCallback(
     (item) => {
-      if (item.type === 'recarga') {
-        const tokenQty = Number(item.silverTokens) || 0
-        const baseCost = tokenQty * silverTokenPrice
-        if (item.fullUsage) {
-          return baseCost
-        }
-        const full = Number(item.fullCharge) || 0
-        const rem = Number(item.remainingCharge) || 0
-        if (full <= 0) return 0
-        const spent = Math.max(0, full - rem)
-        const ratio = Math.min(1, Math.max(0, spent / full))
-        return ratio * baseCost
-      } else {
-        // Imbuement
-        const gtQty = Number(item.goldTokens) || 0
-        const fee = Number(item.fixedFee) || 0
-        return gtQty * goldTokenPrice + fee
+      const tokenQty = Number(item.silverTokens) || 0
+      if (tokenQty <= 0 || silverTokenPrice <= 0) return 0
+
+      if (item.fullUsage) {
+        return tokenQty * silverTokenPrice
       }
+
+      const full = Number(item.fullCharge) || 0
+      const rem = Number(item.remainingCharge) || 0
+      if (full <= 0) return 0
+
+      const used = Math.max(0, full - rem)
+      const ratio = Math.min(1, Math.max(0, used / full))
+      return ratio * (tokenQty * silverTokenPrice)
     },
-    [silverTokenPrice, goldTokenPrice]
+    [silverTokenPrice]
   )
 
   // Total extra costs
@@ -180,18 +164,14 @@ export default function HuntLog() {
       const extraLines = extraCosts
         .map((item) => {
           const cost = Math.round(calculateItemCost(item))
-          if (item.type === 'recarga') {
-            const usageText = item.fullUsage
-              ? 'Carga 100%'
-              : `Gasto: ${Math.max(0, item.fullCharge - item.remainingCharge)}/${item.fullCharge}`
-            return `  - [Recarga] ${item.name || 'Item'}: ${item.silverTokens} ST (${usageText}) = ${formatGold(cost)} gp`
-          } else {
-            return `  - [Imbuement] ${item.name || 'Imbuement'}: ${item.goldTokens} GT + ${formatGold(item.fixedFee)} gp taxa = ${formatGold(cost)} gp`
-          }
+          const usageText = item.fullUsage
+            ? 'Carga 100%'
+            : `Gasto: ${Math.max(0, item.fullCharge - item.remainingCharge)}/${item.fullCharge}`
+          return `  - ${item.name || 'Recarga'}: ${item.silverTokens} ST (${usageText}) = ${formatGold(cost)} gp`
         })
         .join('\n')
 
-      enhancedRawLog += `\n\n--- Custos Extras ---\nPersonagem: ${selectedChar?.name || '—'}\n${extraLines}\nTotal Custos Extras: ${formatGold(totalExtraCosts)} gp\nBalance Bruto Log: ${formatGold(rawBalance)} gp\nBalance Real Ajustado: ${formatGold(adjustedBalance)} gp`
+      enhancedRawLog += `\n\n--- Custos Extras (Silver Tokens) ---\nPersonagem: ${selectedChar?.name || '—'}\n${extraLines}\nTotal Custos Extras: ${formatGold(totalExtraCosts)} gp\nBalance Bruto Log: ${formatGold(rawBalance)} gp\nBalance Real Ajustado: ${formatGold(adjustedBalance)} gp`
     }
 
     const { error } = await createHunt({
@@ -218,7 +198,7 @@ export default function HuntLog() {
       <div>
         <h1 className="text-2xl font-bold text-gray-100">Registrar Hunt</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Cole o log do Party Hunt Analyzer e adicione recargas e imbuements
+          Cole o log do Party Hunt Analyzer e adicione custos extras de recarga
         </p>
       </div>
 
@@ -234,7 +214,7 @@ export default function HuntLog() {
                 Nenhum personagem cadastrado
               </h2>
               <p className="text-xs text-gray-400 mt-0.5 max-w-xl leading-relaxed">
-                Você precisa cadastrar um personagem com o preço dos Tokens em <strong>Configurações</strong> para registrar hunts e calcular os custos extras de recarga e imbuement.
+                Você precisa cadastrar um personagem com o preço do Silver Token em <strong>Configurações</strong> para registrar hunts e calcular os custos extras de recarga.
               </p>
             </div>
           </div>
@@ -287,22 +267,18 @@ export default function HuntLog() {
               ))}
             </select>
 
-            {/* Token Prices in Memory Display */}
+            {/* Silver Token Price in Memory Display */}
             {selectedChar && (
-              <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-lg bg-tibia-deeper/80 border border-tibia-border/60 text-xs">
-                <div className="flex items-center gap-1 text-gray-300">
-                  <span className="text-gray-500 font-medium">Silver Token:</span>
-                  <span className="text-gray-200 font-bold font-mono">
-                    {formatGold(silverTokenPrice)} gp
-                  </span>
-                </div>
-                <span className="text-tibia-border">|</span>
-                <div className="flex items-center gap-1 text-gray-300">
-                  <span className="text-yellow-500 font-medium">Gold Token:</span>
-                  <span className="text-yellow-400 font-bold font-mono">
-                    {formatGold(goldTokenPrice)} gp
-                  </span>
-                </div>
+              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-tibia-deeper/80 border border-tibia-border/60 text-xs">
+                <span className="text-gray-400 font-medium">Preço Silver Token:</span>
+                <span className="text-gray-100 font-bold font-mono">
+                  {formatGold(silverTokenPrice)} gp
+                </span>
+                {silverTokenPrice === 0 && (
+                  <Link to="/configuracoes" className="text-tibia-gold hover:underline text-[11px] ml-auto">
+                    Configurar preço
+                  </Link>
+                )}
               </div>
             )}
           </div>
@@ -330,148 +306,101 @@ export default function HuntLog() {
           />
         </div>
 
-        {/* 3. Tabela / Seção de Custos Extras */}
-        <div className="pt-2 border-t border-tibia-border/50 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+        {/* 3. Seção Simplificada de Custos Extras (Silver Tokens) */}
+        <div className="pt-2 border-t border-tibia-border/50 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-tibia-purple/15 flex items-center justify-center text-tibia-purple flex-shrink-0">
                 <Layers className="w-4 h-4" />
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-gray-200">
-                  Custos Extras (Imbuements e Recargas)
+                  Custos Extras (Recargas)
                 </h3>
                 <p className="text-xs text-gray-500">
-                  Gastos adicionais com Silver Tokens e Gold Tokens que serão subtraídos do Balance
+                  Gastos com Silver Tokens que serão deduzidos do Balance
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => handleAddCost('recarga')}
-                className="btn-secondary !px-2.5 !py-1.5 text-xs flex items-center gap-1 text-gray-300 hover:text-tibia-gold"
-                title="Adicionar Recarga de Silver Token"
-              >
-                <Plus className="w-3.5 h-3.5 text-gray-400" />
-                + Recarga (ST)
-              </button>
-              <button
-                type="button"
-                onClick={() => handleAddCost('imbuement')}
-                className="btn-secondary !px-2.5 !py-1.5 text-xs flex items-center gap-1 text-gray-300 hover:text-yellow-400"
-                title="Adicionar Imbuement com Gold Tokens"
-              >
-                <Plus className="w-3.5 h-3.5 text-yellow-500" />
-                + Imbuement (GT)
-              </button>
-            </div>
-          </div>
-
-          {/* Quick preset buttons */}
-          <div className="flex flex-wrap gap-1.5 pt-1">
+            {/* Botão Único Central/Alinhado */}
             <button
               type="button"
-              onClick={() => {
-                const item = {
-                  id: `cost_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-                  type: 'recarga',
-                  name: 'Collar of Blue Plasma',
-                  silverTokens: 5,
-                  fullUsage: true,
-                  fullCharge: 30,
-                  remainingCharge: 0,
-                }
-                setExtraCosts((prev) => [...prev, item])
-              }}
-              className="px-2.5 py-1 rounded-md bg-tibia-deeper hover:bg-tibia-card border border-tibia-border text-[11px] text-gray-400 hover:text-gray-200 transition-colors"
+              onClick={handleAddCost}
+              className="btn-primary !px-3.5 !py-2 text-xs flex items-center justify-center gap-1.5 self-start sm:self-auto"
             >
-              + Collar Plasma (5 ST)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const item = {
-                  id: `cost_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-                  type: 'recarga',
-                  name: 'Ring of Blue Plasma',
-                  silverTokens: 5,
-                  fullUsage: true,
-                  fullCharge: 30,
-                  remainingCharge: 0,
-                }
-                setExtraCosts((prev) => [...prev, item])
-              }}
-              className="px-2.5 py-1 rounded-md bg-tibia-deeper hover:bg-tibia-card border border-tibia-border text-[11px] text-gray-400 hover:text-gray-200 transition-colors"
-            >
-              + Ring Plasma (5 ST)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const item = {
-                  id: `cost_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-                  type: 'imbuement',
-                  name: 'Powerful Strike',
-                  goldTokens: 6,
-                  fixedFee: 150000,
-                }
-                setExtraCosts((prev) => [...prev, item])
-              }}
-              className="px-2.5 py-1 rounded-md bg-tibia-deeper hover:bg-tibia-card border border-tibia-border text-[11px] text-gray-400 hover:text-yellow-400 transition-colors"
-            >
-              + Powerful Imbuement (6 GT + 150k)
+              <Plus className="w-4 h-4" />
+              <span>+ Adicionar Custo Extra</span>
             </button>
           </div>
 
           {/* List of Extra Costs Rows */}
           {extraCosts.length === 0 ? (
-            <div className="p-4 rounded-xl border border-dashed border-tibia-border/60 bg-tibia-deeper/30 text-center text-xs text-gray-500">
+            <div className="p-5 rounded-xl border border-dashed border-tibia-border/60 bg-tibia-deeper/30 text-center text-xs text-gray-500">
               Nenhum custo extra adicionado para esta hunt.
             </div>
           ) : (
-            <div className="space-y-2.5 pt-1">
+            <div className="space-y-3">
               {extraCosts.map((item) => {
                 const cost = Math.round(calculateItemCost(item))
 
                 return (
                   <div
                     key={item.id}
-                    className="p-3.5 rounded-xl bg-tibia-deeper/80 border border-tibia-border/70 hover:border-tibia-border transition-all duration-150 space-y-3"
+                    className="p-4 rounded-xl bg-tibia-deeper/80 border border-tibia-border/70 hover:border-tibia-border transition-all duration-150 space-y-3"
                   >
-                    {/* Top Row: Type, Name, Cost Display, Delete */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        {/* Type Select */}
-                        <select
-                          value={item.type}
-                          onChange={(e) => handleUpdateCost(item.id, 'type', e.target.value)}
-                          className="px-2.5 py-1 rounded-lg bg-tibia-card border border-tibia-border text-xs font-semibold text-gray-200 cursor-pointer"
-                        >
-                          <option value="recarga">Recarga (Silver Token)</option>
-                          <option value="imbuement">Imbuement (Gold Token)</option>
-                        </select>
-
-                        {/* Name Input */}
+                    {/* Linha Principal: Nome do Item, Qtd Silver Tokens, Checkbox, Custo e Excluir */}
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                      {/* Nome do Item */}
+                      <div className="sm:col-span-5">
+                        <label className="text-[10px] text-gray-400 font-medium uppercase tracking-wider block mb-1">
+                          Nome do Item
+                        </label>
                         <input
                           type="text"
-                          placeholder={item.type === 'recarga' ? 'Ex: Collar of Blue Plasma' : 'Ex: Powerful Strike'}
+                          placeholder="Ex: Collar of Blue Plasma, Ring..."
                           value={item.name}
                           onChange={(e) => handleUpdateCost(item.id, 'name', e.target.value)}
-                          className="input-field !py-1 !px-2.5 text-xs flex-1"
+                          className="input-field !py-1.5 !px-3 text-xs"
                         />
                       </div>
 
-                      {/* Cost & Delete */}
-                      <div className="flex items-center justify-between sm:justify-end gap-3 self-end sm:self-auto">
+                      {/* Quantidade de Silver Tokens (Recarga) */}
+                      <div className="sm:col-span-3">
+                        <label className="text-[10px] text-gray-400 font-medium uppercase tracking-wider block mb-1">
+                          Qtd Silver Tokens (Recarga)
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder="Ex: 5"
+                          value={item.silverTokens}
+                          onChange={(e) => handleUpdateCost(item.id, 'silverTokens', e.target.value)}
+                          className="input-field !py-1.5 !px-3 text-xs font-mono"
+                        />
+                      </div>
+
+                      {/* Checkbox: Usou toda a carga? */}
+                      <div className="sm:col-span-2 flex items-center h-9">
+                        <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-gray-300 font-medium">
+                          <input
+                            type="checkbox"
+                            checked={item.fullUsage}
+                            onChange={(e) => handleUpdateCost(item.id, 'fullUsage', e.target.checked)}
+                            className="rounded border-tibia-border text-tibia-gold focus:ring-tibia-gold/30 bg-tibia-deeper w-4 h-4 cursor-pointer"
+                          />
+                          <span>Usou toda a carga?</span>
+                        </label>
+                      </div>
+
+                      {/* Custo Calculado & Botão Excluir */}
+                      <div className="sm:col-span-2 flex items-center justify-end gap-2.5">
                         <div className="text-right">
-                          <span className="text-[10px] uppercase text-gray-500 block">Custo Total</span>
-                          <span className="text-sm font-bold text-tibia-purple font-mono">
+                          <span className="text-[10px] uppercase text-gray-500 block">Custo</span>
+                          <span className="text-xs font-bold text-tibia-purple font-mono">
                             +{formatGold(cost)} gp
                           </span>
                         </div>
-
                         <button
                           type="button"
                           onClick={() => handleRemoveCost(item.id)}
@@ -483,97 +412,41 @@ export default function HuntLog() {
                       </div>
                     </div>
 
-                    {/* Bottom Row: Specific Inputs according to Type */}
-                    {item.type === 'recarga' ? (
-                      /* ── Recarga (Silver Tokens) ── */
-                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2 border-t border-tibia-border/40 text-xs items-center">
+                    {/* Se desmarcou o checkbox: exibe Carga Total e Carga Restante */}
+                    {!item.fullUsage && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2.5 border-t border-tibia-border/40 text-xs bg-tibia-card/30 p-3 rounded-lg animate-fade-in">
                         <div>
                           <label className="text-[10px] text-gray-400 font-medium uppercase tracking-wider block mb-1">
-                            Qtd Silver Tokens
+                            Carga Total
                           </label>
                           <input
                             type="number"
                             min="1"
-                            value={item.silverTokens}
-                            onChange={(e) => handleUpdateCost(item.id, 'silverTokens', e.target.value)}
-                            className="input-field !py-1 !px-2.5 text-xs font-mono"
+                            placeholder="Ex: 30"
+                            value={item.fullCharge}
+                            onChange={(e) => handleUpdateCost(item.id, 'fullCharge', e.target.value)}
+                            className="input-field !py-1.5 !px-3 text-xs font-mono"
                           />
+                          <span className="text-[10px] text-gray-500 mt-0.5 block">
+                            Carga máxima do item (ex: 30 minutos ou 100)
+                          </span>
                         </div>
 
-                        {/* Checkbox: Usou toda a carga? */}
-                        <div className="flex items-center gap-2 pt-4">
-                          <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-gray-300">
-                            <input
-                              type="checkbox"
-                              checked={item.fullUsage}
-                              onChange={(e) => handleUpdateCost(item.id, 'fullUsage', e.target.checked)}
-                              className="rounded border-tibia-border text-tibia-gold focus:ring-tibia-gold/30 bg-tibia-deeper w-4 h-4"
-                            />
-                            <span>Usou toda a carga?</span>
-                          </label>
-                        </div>
-
-                        {/* If NOT fullUsage: Carga Completa & Carga Restante */}
-                        {!item.fullUsage && (
-                          <>
-                            <div>
-                              <label className="text-[10px] text-gray-400 font-medium uppercase tracking-wider block mb-1">
-                                Carga Completa
-                              </label>
-                              <input
-                                type="number"
-                                min="1"
-                                placeholder="30"
-                                value={item.fullCharge}
-                                onChange={(e) => handleUpdateCost(item.id, 'fullCharge', e.target.value)}
-                                className="input-field !py-1 !px-2.5 text-xs font-mono"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-[10px] text-gray-400 font-medium uppercase tracking-wider block mb-1">
-                                Carga Restante
-                              </label>
-                              <input
-                                type="number"
-                                min="0"
-                                placeholder="10"
-                                value={item.remainingCharge}
-                                onChange={(e) => handleUpdateCost(item.id, 'remainingCharge', e.target.value)}
-                                className="input-field !py-1 !px-2.5 text-xs font-mono"
-                              />
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ) : (
-                      /* ── Imbuement (Gold Tokens) ── */
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-tibia-border/40 text-xs">
-                        <div>
-                          <label className="text-[10px] text-yellow-500 font-medium uppercase tracking-wider block mb-1">
-                            Qtd Gold Tokens (GT)
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            placeholder="6"
-                            value={item.goldTokens}
-                            onChange={(e) => handleUpdateCost(item.id, 'goldTokens', e.target.value)}
-                            className="input-field !py-1 !px-2.5 text-xs font-mono"
-                          />
-                        </div>
                         <div>
                           <label className="text-[10px] text-gray-400 font-medium uppercase tracking-wider block mb-1">
-                            Taxa Fixa / Extra (gp)
+                            Carga Restante
                           </label>
                           <input
                             type="number"
                             min="0"
-                            step="1000"
-                            placeholder="150000"
-                            value={item.fixedFee}
-                            onChange={(e) => handleUpdateCost(item.id, 'fixedFee', e.target.value)}
-                            className="input-field !py-1 !px-2.5 text-xs font-mono"
+                            placeholder="Ex: 10"
+                            value={item.remainingCharge}
+                            onChange={(e) => handleUpdateCost(item.id, 'remainingCharge', e.target.value)}
+                            className="input-field !py-1.5 !px-3 text-xs font-mono"
                           />
+                          <span className="text-[10px] text-gray-500 mt-0.5 block">
+                            Quanto sobrou no item após a hunt
+                          </span>
                         </div>
                       </div>
                     )}
@@ -581,7 +454,7 @@ export default function HuntLog() {
                 )
               })}
 
-              {/* Extra costs summary line */}
+              {/* Barra de resumo de custos extras */}
               <div className="p-3 rounded-lg bg-tibia-card/60 border border-tibia-border/60 flex items-center justify-between text-xs">
                 <span className="text-gray-400">Total de Custos Extras a deduzir:</span>
                 <span className="text-sm font-bold text-tibia-purple font-mono">
