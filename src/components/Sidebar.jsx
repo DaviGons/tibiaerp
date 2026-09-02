@@ -12,6 +12,7 @@ import {
   User,
   History,
   Wrench,
+  Settings,
 } from 'lucide-react'
 
 const navItems = [
@@ -19,6 +20,7 @@ const navItems = [
   { to: '/hunt-log', icon: ScrollText, label: 'Registrar Hunt' },
   { to: '/historico', icon: History, label: 'Histórico' },
   { to: '/ferramentas', icon: Wrench, label: 'Ferramentas' },
+  { to: '/configuracoes', icon: Settings, label: 'Configurações' },
 ]
 
 export default function Sidebar({ collapsed, onToggle }) {
