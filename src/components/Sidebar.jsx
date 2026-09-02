@@ -10,11 +10,13 @@ import {
   Swords,
   ChevronLeft,
   User,
+  History,
 } from 'lucide-react'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/hunt-log', icon: ScrollText, label: 'Registrar Hunt' },
+  { to: '/historico', icon: History, label: 'Histórico' },
 ]
 
 export default function Sidebar({ collapsed, onToggle }) {

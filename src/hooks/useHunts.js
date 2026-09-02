@@ -69,9 +69,39 @@ export function useHunts() {
     }
   }
 
+  const deleteHunt = async (huntId) => {
+    if (!user) {
+      setError('Usuário não autenticado')
+      return { error: 'Usuário não autenticado' }
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      // Delete the hunt (profile_id filter ensures user can only delete their own)
+      const { error: deleteError } = await supabase
+        .from('hunts')
+        .delete()
+        .eq('id', huntId)
+        .eq('profile_id', user.id)
+
+      if (deleteError) throw deleteError
+
+      return { error: null }
+    } catch (err) {
+      console.error('Delete hunt error:', err)
+      setError(err.message)
+      return { error: err.message }
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return {
     createHunt,
     fetchHunts,
+    deleteHunt,
     loading,
     error,
   }
