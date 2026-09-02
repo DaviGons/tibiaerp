@@ -173,4 +173,31 @@ export function formatGoldShort(value) {
   return `${sign}${abs}`
 }
 
+/**
+ * Converts a duration string (e.g. "01:30h", "00:45h", "1:30", "02:15:00") to decimal hours.
+ * @param {string} durationStr
+ * @returns {number}
+ */
+export function parseDurationToHours(durationStr) {
+  if (!durationStr || typeof durationStr !== 'string') return 0
+  const clean = durationStr.trim().replace(/h$/i, '').trim()
+  
+  const parts = clean.split(':').map(p => Number(p))
+  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+    return parts[0] + parts[1] / 60
+  }
+  if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+    return parts[0] + parts[1] / 60 + parts[2] / 3600
+  }
+  
+  const minMatch = clean.match(/^(\d+)\s*m$/i)
+  if (minMatch) {
+    return Number(minMatch[1]) / 60
+  }
+  
+  const num = parseFloat(clean)
+  return isNaN(num) ? 0 : num
+}
+
+
 

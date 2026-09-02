@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { parseHuntLog, formatGold } from '../utils/parseHuntLog'
+import { parseHuntLog, formatGold, parseDurationToHours } from '../utils/parseHuntLog'
 import { useHunts } from '../hooks/useHunts'
 import { useCharacter } from '../contexts/CharacterContext'
 import {
@@ -56,16 +56,31 @@ export default function HuntLog() {
 
   const silverTokenPrice = Number(selectedChar?.silver_token_price) || 0
 
-  // ─── Extra Costs Management (Silver Tokens Only) ───────────────────────────
+  // ─── Extract Hunt Duration from Log ─────────────────────────────────────────
+
+  const huntDurationStr = useMemo(() => {
+    if (parsedData?.session?.duration) return parsedData.session.duration
+    if (!rawLog) return ''
+    const match = rawLog.match(/Session:\s*([^\r\n]+)/i)
+    if (match && !match[0].includes('Session data')) {
+      return match[1].trim()
+    }
+    return ''
+  }, [parsedData, rawLog])
+
+  const huntDurationHours = useMemo(() => {
+    return parseDurationToHours(huntDurationStr)
+  }, [huntDurationStr])
+
+  // ─── Extra Costs Management (Silver Tokens & Automated Hours) ──────────────
 
   const handleAddCost = () => {
     const newItem = {
       id: `cost_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       name: '',
       silverTokens: 5,
-      fullUsage: true,
-      fullCharge: 30,
-      remainingCharge: 0,
+      totalHours: 2, // default 2h (ex: Spiritthorn Ring, Pendulet, etc.)
+      fullUsage: false,
     }
     setExtraCosts((prev) => [...prev, newItem])
   }
@@ -80,25 +95,30 @@ export default function HuntLog() {
     setExtraCosts((prev) => prev.filter((item) => item.id !== id))
   }
 
-  // Calculate cost for each item based on Silver Tokens and proportional usage
+  // Calculate cost for each item based on Silver Tokens and automated hunt duration
   const calculateItemCost = useCallback(
     (item) => {
       const tokenQty = Number(item.silverTokens) || 0
       if (tokenQty <= 0 || silverTokenPrice <= 0) return 0
 
+      // If full usage is explicitly checked, charge 100% of recharge cost
       if (item.fullUsage) {
         return tokenQty * silverTokenPrice
       }
 
-      const full = Number(item.fullCharge) || 0
-      const rem = Number(item.remainingCharge) || 0
-      if (full <= 0) return 0
+      // Automated calculation by hours: (Hunt Duration / Item Total Hours) * (Tokens * Price)
+      const itemHours = Number(item.totalHours) || 0
+      if (itemHours <= 0) return 0
 
-      const used = Math.max(0, full - rem)
-      const ratio = Math.min(1, Math.max(0, used / full))
-      return ratio * (tokenQty * silverTokenPrice)
+      if (huntDurationHours > 0) {
+        // Capped at 100% if hunt duration is greater than item duration
+        const fraction = Math.min(1, huntDurationHours / itemHours)
+        return fraction * (tokenQty * silverTokenPrice)
+      }
+
+      return 0
     },
-    [silverTokenPrice]
+    [silverTokenPrice, huntDurationHours]
   )
 
   // Total extra costs
@@ -129,7 +149,7 @@ export default function HuntLog() {
     const result = parseHuntLog(rawLog)
     if (!result) {
       setParseError(
-        'Não foi possível interpretar o log. Verifique se você colou o texto completo do Party Hunt Analyzer.'
+        'Não foi possível interpretar o log. Verifique se você colou o texto completo do Hunt Analyzer.'
       )
       setParsedData(null)
       return
@@ -164,14 +184,17 @@ export default function HuntLog() {
       const extraLines = extraCosts
         .map((item) => {
           const cost = Math.round(calculateItemCost(item))
+          const itemHours = Number(item.totalHours) || 0
           const usageText = item.fullUsage
             ? 'Carga 100%'
-            : `Gasto: ${Math.max(0, item.fullCharge - item.remainingCharge)}/${item.fullCharge}`
+            : huntDurationHours > 0 && itemHours > 0
+              ? `${huntDurationHours.toFixed(2)}h de ${itemHours}h (${Math.min(100, (huntDurationHours / itemHours) * 100).toFixed(0)}%)`
+              : 'Sem duração'
           return `  - ${item.name || 'Recarga'}: ${item.silverTokens} ST (${usageText}) = ${formatGold(cost)} gp`
         })
         .join('\n')
 
-      enhancedRawLog += `\n\n--- Custos Extras (Silver Tokens) ---\nPersonagem: ${selectedChar?.name || '—'}\n${extraLines}\nTotal Custos Extras: ${formatGold(totalExtraCosts)} gp\nBalance Bruto Log: ${formatGold(rawBalance)} gp\nBalance Real Ajustado: ${formatGold(adjustedBalance)} gp`
+      enhancedRawLog += `\n\n--- Custos Extras (Silver Tokens) ---\nPersonagem: ${selectedChar?.name || '—'}\nTempo Hunt: ${huntDurationStr || '—'}\n${extraLines}\nTotal Custos Extras: ${formatGold(totalExtraCosts)} gp\nBalance Bruto Log: ${formatGold(rawBalance)} gp\nBalance Real Ajustado: ${formatGold(adjustedBalance)} gp`
     }
 
     const { error } = await createHunt({
@@ -198,7 +221,7 @@ export default function HuntLog() {
       <div>
         <h1 className="text-2xl font-bold text-gray-100">Registrar Hunt</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Cole o log do Party Hunt Analyzer e adicione custos extras de recarga
+          Cole o log do Hunt Analyzer e adicione custos extras de recarga
         </p>
       </div>
 
@@ -300,13 +323,13 @@ export default function HuntLog() {
               setParseError('')
               setSaveSuccess(false)
             }}
-            placeholder={`Cole aqui o texto copiado do Party Hunt Analyzer...\n\nExemplo:\nSession data: From 2026-08-30, 21:00:00 to 2026-08-30, 22:30:00\nSession: 01:30h\nLoot Type: Market\nLoot: 1,500,500\nSupplies: 450,000\nBalance: 1,050,500`}
+            placeholder={`Cole aqui o texto copiado do Hunt Analyzer...\n\nExemplo:\nSession data: From 2026-08-30, 21:00:00 to 2026-08-30, 22:30:00\nSession: 01:30h\nLoot Type: Market\nLoot: 1,500,500\nSupplies: 450,000\nBalance: 1,050,500`}
             rows={8}
             className="input-field font-mono text-sm resize-y min-h-[160px] leading-relaxed"
           />
         </div>
 
-        {/* 3. Seção Simplificada de Custos Extras (Silver Tokens) */}
+        {/* 3. Seção Simplificada de Custos Extras (Silver Tokens por Horas) */}
         <div className="pt-2 border-t border-tibia-border/50 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
@@ -314,23 +337,30 @@ export default function HuntLog() {
                 <Layers className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-gray-200">
-                  Custos Extras (Recargas)
-                </h3>
-                <p className="text-xs text-gray-500">
-                  Gastos com Silver Tokens que serão deduzidos do Balance
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-gray-200">
+                    Custos Extras (Recargas)
+                  </h3>
+                  {huntDurationStr && (
+                    <span className="badge bg-tibia-purple/15 text-tibia-purple border border-tibia-purple/30 text-[10px] font-mono">
+                      Duração: {huntDurationStr} ({huntDurationHours.toFixed(2)}h)
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Cálculo automático proporcional à duração da hunt lida no log
                 </p>
               </div>
             </div>
 
-            {/* Botão Único Central/Alinhado */}
+            {/* Botão Único (Sem '+' duplicado) */}
             <button
               type="button"
               onClick={handleAddCost}
               className="btn-primary !px-3.5 !py-2 text-xs flex items-center justify-center gap-1.5 self-start sm:self-auto"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Adicionar Custo Extra</span>
+              <span>Adicionar Custo Extra</span>
             </button>
           </div>
 
@@ -343,22 +373,28 @@ export default function HuntLog() {
             <div className="space-y-3">
               {extraCosts.map((item) => {
                 const cost = Math.round(calculateItemCost(item))
+                const itemHours = Number(item.totalHours) || 0
+                const percentUsed =
+                  item.fullUsage
+                    ? 100
+                    : itemHours > 0 && huntDurationHours > 0
+                      ? Math.min(100, (huntDurationHours / itemHours) * 100)
+                      : 0
 
                 return (
                   <div
                     key={item.id}
                     className="p-4 rounded-xl bg-tibia-deeper/80 border border-tibia-border/70 hover:border-tibia-border transition-all duration-150 space-y-3"
                   >
-                    {/* Linha Principal: Nome do Item, Qtd Silver Tokens, Checkbox, Custo e Excluir */}
                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                      {/* Nome do Item */}
-                      <div className="sm:col-span-5">
+                      {/* Nome do Item (Placeholders: Ex: Spiritthorn Ring / Ex: Pendulet) */}
+                      <div className="sm:col-span-4">
                         <label className="text-[10px] text-gray-400 font-medium uppercase tracking-wider block mb-1">
                           Nome do Item
                         </label>
                         <input
                           type="text"
-                          placeholder="Ex: Collar of Blue Plasma, Ring..."
+                          placeholder="Ex: Spiritthorn Ring, Pendulet..."
                           value={item.name}
                           onChange={(e) => handleUpdateCost(item.id, 'name', e.target.value)}
                           className="input-field !py-1.5 !px-3 text-xs"
@@ -368,29 +404,38 @@ export default function HuntLog() {
                       {/* Quantidade de Silver Tokens (Recarga) */}
                       <div className="sm:col-span-3">
                         <label className="text-[10px] text-gray-400 font-medium uppercase tracking-wider block mb-1">
-                          Qtd Silver Tokens (Recarga)
+                          Qtd Silver Tokens
                         </label>
                         <input
                           type="number"
                           min="1"
-                          placeholder="Ex: 5"
+                          placeholder="5"
                           value={item.silverTokens}
                           onChange={(e) => handleUpdateCost(item.id, 'silverTokens', e.target.value)}
                           className="input-field !py-1.5 !px-3 text-xs font-mono"
                         />
                       </div>
 
-                      {/* Checkbox: Usou toda a carga? */}
-                      <div className="sm:col-span-2 flex items-center h-9">
-                        <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-gray-300 font-medium">
-                          <input
-                            type="checkbox"
-                            checked={item.fullUsage}
-                            onChange={(e) => handleUpdateCost(item.id, 'fullUsage', e.target.checked)}
-                            className="rounded border-tibia-border text-tibia-gold focus:ring-tibia-gold/30 bg-tibia-deeper w-4 h-4 cursor-pointer"
-                          />
-                          <span>Usou toda a carga?</span>
+                      {/* Carga Total do Item (em horas) */}
+                      <div className="sm:col-span-3">
+                        <label className="text-[10px] text-gray-400 font-medium uppercase tracking-wider block mb-1">
+                          Carga Total (horas)
                         </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0.1"
+                            step="0.5"
+                            placeholder="2"
+                            value={item.totalHours}
+                            onChange={(e) => handleUpdateCost(item.id, 'totalHours', e.target.value)}
+                            disabled={item.fullUsage}
+                            className="input-field !py-1.5 !px-3 text-xs font-mono pr-7 disabled:opacity-50"
+                          />
+                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-medium pointer-events-none">
+                            h
+                          </span>
+                        </div>
                       </div>
 
                       {/* Custo Calculado & Botão Excluir */}
@@ -412,44 +457,42 @@ export default function HuntLog() {
                       </div>
                     </div>
 
-                    {/* Se desmarcou o checkbox: exibe Carga Total e Carga Restante */}
-                    {!item.fullUsage && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2.5 border-t border-tibia-border/40 text-xs bg-tibia-card/30 p-3 rounded-lg animate-fade-in">
-                        <div>
-                          <label className="text-[10px] text-gray-400 font-medium uppercase tracking-wider block mb-1">
-                            Carga Total
-                          </label>
-                          <input
-                            type="number"
-                            min="1"
-                            placeholder="Ex: 30"
-                            value={item.fullCharge}
-                            onChange={(e) => handleUpdateCost(item.id, 'fullCharge', e.target.value)}
-                            className="input-field !py-1.5 !px-3 text-xs font-mono"
-                          />
-                          <span className="text-[10px] text-gray-500 mt-0.5 block">
-                            Carga máxima do item (ex: 30 minutos ou 100)
-                          </span>
-                        </div>
+                    {/* Bottom Status / Checkbox bar */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pt-2 border-t border-tibia-border/40 text-xs">
+                      {/* Checkbox: Usou toda a carga? */}
+                      <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={item.fullUsage}
+                          onChange={(e) => handleUpdateCost(item.id, 'fullUsage', e.target.checked)}
+                          className="rounded border-tibia-border text-tibia-gold focus:ring-tibia-gold/30 bg-tibia-deeper w-4 h-4 cursor-pointer"
+                        />
+                        <span>Usou toda a carga? (100%)</span>
+                      </label>
 
-                        <div>
-                          <label className="text-[10px] text-gray-400 font-medium uppercase tracking-wider block mb-1">
-                            Carga Restante
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            placeholder="Ex: 10"
-                            value={item.remainingCharge}
-                            onChange={(e) => handleUpdateCost(item.id, 'remainingCharge', e.target.value)}
-                            className="input-field !py-1.5 !px-3 text-xs font-mono"
-                          />
-                          <span className="text-[10px] text-gray-500 mt-0.5 block">
-                            Quanto sobrou no item após a hunt
-                          </span>
+                      {/* Proportional Calculation Info */}
+                      {!item.fullUsage ? (
+                        <div className="text-[11px] text-gray-400">
+                          {huntDurationHours > 0 ? (
+                            <span>
+                              Cálculo:{' '}
+                              <strong className="text-gray-200">
+                                {huntDurationHours.toFixed(2)}h
+                              </strong>{' '}
+                              de {item.totalHours}h ({percentUsed.toFixed(0)}% da recarga)
+                            </span>
+                          ) : (
+                            <span className="text-yellow-500 italic">
+                              Cole o log para calcular o tempo proporcional da hunt
+                            </span>
+                          )}
                         </div>
-                      </div>
-                    )}
+                      ) : (
+                        <span className="text-[11px] text-tibia-purple font-medium">
+                          Cobrança integral da recarga (100%)
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )
               })}
