@@ -27,7 +27,6 @@ import {
 export default function HuntLog() {
   const [rawLog, setRawLog] = useState('')
   const [location, setLocation] = useState('')
-  const [huntDate, setHuntDate] = useState('')
   const [parsedData, setParsedData] = useState(null)
   const [parseError, setParseError] = useState('')
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -161,7 +160,6 @@ export default function HuntLog() {
   const handleClear = () => {
     setRawLog('')
     setLocation('')
-    setHuntDate('')
     setParsedData(null)
     setExtraCosts([])
     setParseError('')
@@ -197,10 +195,13 @@ export default function HuntLog() {
       enhancedRawLog += `\n\n--- Custos Extras (Silver Tokens) ---\nPersonagem: ${selectedChar?.name || '—'}\nTempo Hunt: ${huntDurationStr || '—'}\n${extraLines}\nTotal Custos Extras: ${formatGold(totalExtraCosts)} gp\nBalance Bruto Log: ${formatGold(rawBalance)} gp\nBalance Real Ajustado: ${formatGold(adjustedBalance)} gp`
     }
 
+    // Use extracted start date from log or fallback to current date/time
+    const autoHuntDate = parsedData.session?.startDate || new Date().toISOString()
+
     const { error } = await createHunt({
       characterId: selectedCharId,
       location: location || parsedData.session?.lootType || 'Unknown',
-      huntDate: huntDate || new Date().toISOString(),
+      huntDate: autoHuntDate,
       totalLoot: parsedData.totals.loot,
       totalSupplies: adjustedSupplies,
       balance: adjustedBalance,
@@ -509,35 +510,20 @@ export default function HuntLog() {
           )}
         </div>
 
-        {/* 4. Metadata fields: Location & Date */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-tibia-border/50">
-          <div>
-            <label htmlFor="location" className="label-text flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5" />
-              Local da Hunt
-            </label>
-            <input
-              id="location"
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="Ex: Roshamuul, Ferumbras Ascension..."
-              className="input-field"
-            />
-          </div>
-          <div>
-            <label htmlFor="hunt-date" className="label-text flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5" />
-              Data da Hunt
-            </label>
-            <input
-              id="hunt-date"
-              type="datetime-local"
-              value={huntDate}
-              onChange={(e) => setHuntDate(e.target.value)}
-              className="input-field"
-            />
-          </div>
+        {/* 4. Metadata field: Location */}
+        <div className="pt-2 border-t border-tibia-border/50">
+          <label htmlFor="location" className="label-text flex items-center gap-1.5">
+            <MapPin className="w-3.5 h-3.5" />
+            Local da Hunt
+          </label>
+          <input
+            id="location"
+            type="text"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="Ex: Roshamuul, Ferumbras Ascension..."
+            className="input-field"
+          />
         </div>
 
         {/* Action buttons */}

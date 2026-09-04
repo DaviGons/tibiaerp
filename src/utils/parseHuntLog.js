@@ -48,11 +48,21 @@ export function parseHuntLog(rawText) {
   for (const line of lines) {
     // Session data line
     const sessionMatch = line.match(
-      /^Session data:\s*From\s+(\d{4}-\d{2}-\d{2},\s*\d{2}:\d{2}:\d{2})\s+to\s+(\d{4}-\d{2}-\d{2},\s*\d{2}:\d{2}:\d{2})/i
+      /^Session data:\s*From\s+(\d{4}-\d{2}-\d{2})(?:,\s*(\d{2}:\d{2}:\d{2}))?/i
     )
     if (sessionMatch) {
-      result.session.from = sessionMatch[1].replace(',', '')
-      result.session.to = sessionMatch[2].replace(',', '')
+      const fromDate = sessionMatch[1]
+      const fromTime = sessionMatch[2] || '00:00:00'
+      const isoCandidate = `${fromDate}T${fromTime}`
+      const dateObj = new Date(isoCandidate)
+
+      result.session.startDate = !isNaN(dateObj.getTime()) ? dateObj.toISOString() : null
+      result.session.from = `${fromDate}${sessionMatch[2] ? ` ${sessionMatch[2]}` : ''}`
+
+      const toMatch = line.match(/to\s+(\d{4}-\d{2}-\d{2})(?:,\s*(\d{2}:\d{2}:\d{2}))?/i)
+      if (toMatch) {
+        result.session.to = `${toMatch[1]}${toMatch[2] ? ` ${toMatch[2]}` : ''}`
+      }
       continue
     }
 
