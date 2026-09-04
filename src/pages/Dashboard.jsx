@@ -239,7 +239,7 @@ export default function Dashboard() {
                     {item.description}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {item.date ? formatDate(item.date) : '—'}
+                    {formatActivitySubtitle(item)}
                   </p>
                 </div>
 
@@ -321,11 +321,16 @@ function StatCard({
   )
 }
 
-function formatDate(dateStr) {
+function formatActivitySubtitle(item) {
+  if (!item?.date) return '—'
   try {
-    const date = new Date(dateStr)
-    return format(date, "dd MMM yyyy, HH:mm", { locale: ptBR })
+    const date = new Date(item.date)
+    const formattedDate = format(date, "dd MMM yyyy", { locale: ptBR })
+    if (item.type === 'hunt' && item.duration) {
+      return `${formattedDate} • ${item.duration}`
+    }
+    return formattedDate
   } catch {
-    return dateStr
+    return item.date
   }
 }

@@ -28,7 +28,7 @@ export function useDashboard() {
       // Fallback: no active character → show all hunts (consolidated view).
       let huntsQuery = supabase
         .from('hunts')
-        .select('id, location, hunt_date, total_loot, total_supplies, balance, created_at')
+        .select('id, location, hunt_date, duration, total_loot, total_supplies, balance, raw_log, created_at')
         .eq('profile_id', user.id)
 
       if (activeCharacterId) {
@@ -71,13 +71,18 @@ export function useDashboard() {
 
       // Combine and sort recent activity (last 10)
       const combined = [
-        ...(hunts || []).map(h => ({
-          id: h.id,
-          type: 'hunt',
-          description: h.location || 'Hunt',
-          amount: h.balance,
-          date: h.hunt_date || h.created_at,
-        })),
+        ...(hunts || []).map(h => {
+          const loc = h.location && h.location.trim() && h.location !== 'Unknown' ? h.location : 'Hunt Solo'
+          const dur = h.duration || extractDurationFromLog(h.raw_log)
+          return {
+            id: h.id,
+            type: 'hunt',
+            description: loc,
+            amount: h.balance,
+            date: h.hunt_date || h.created_at,
+            duration: dur,
+          }
+        }),
         ...(transactions || []).map(t => ({
           id: t.id,
           type: 'transaction',
@@ -112,4 +117,13 @@ export function useDashboard() {
     error,
     refresh: fetchDashboardData,
   }
+}
+
+function extractDurationFromLog(rawLog) {
+  if (!rawLog) return null
+  const match = rawLog.match(/Session:\s*([^\r\n]+)/i)
+  if (match && !match[0].includes('Session data')) {
+    return match[1].trim()
+  }
+  return null
 }

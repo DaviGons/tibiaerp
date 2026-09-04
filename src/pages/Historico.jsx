@@ -330,15 +330,22 @@ export default function Historico() {
                   <MapPin className="w-3.5 h-3.5" />
                   Local
                 </span>
-                <span className="text-gray-200 font-medium">{deleteTarget.location || '—'}</span>
+                <span className="text-gray-200 font-medium">
+                  {deleteTarget.location && deleteTarget.location.trim() && deleteTarget.location !== 'Unknown'
+                    ? deleteTarget.location
+                    : 'Hunt Solo'}
+                </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500 flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5" />
-                  Data
+                  Data / Duração
                 </span>
                 <span className="text-gray-200 font-medium">
-                  {deleteTarget.hunt_date ? formatDate(deleteTarget.hunt_date) : '—'}
+                  {formatHuntSubtitle(
+                    deleteTarget.hunt_date,
+                    deleteTarget.duration || extractDuration(deleteTarget.raw_log)
+                  )}
                 </span>
               </div>
               <div className="flex items-center justify-between text-sm">
@@ -405,6 +412,8 @@ export default function Historico() {
 function HuntRow({ hunt, index, onDelete, isDeleting, showCharacter, characterName }) {
   const balanceColor = hunt.balance >= 0 ? 'text-tibia-green' : 'text-tibia-red'
   const balanceBadge = hunt.balance >= 0 ? 'badge-profit' : 'badge-loss'
+  const displayLocation = hunt.location && hunt.location.trim() && hunt.location !== 'Unknown' ? hunt.location : 'Hunt Solo'
+  const huntDuration = hunt.duration || extractDuration(hunt.raw_log)
 
   return (
     <>
@@ -420,10 +429,10 @@ function HuntRow({ hunt, index, onDelete, isDeleting, showCharacter, characterNa
         {/* Date & Location */}
         <div className="min-w-0">
           <p className="text-sm font-medium text-gray-200 truncate">
-            {hunt.location || 'Sem local'}
+            {displayLocation}
           </p>
           <p className="text-xs text-gray-500 mt-0.5">
-            {hunt.hunt_date ? formatDate(hunt.hunt_date) : '—'}
+            {formatHuntSubtitle(hunt.hunt_date, huntDuration)}
           </p>
         </div>
 
@@ -445,7 +454,7 @@ function HuntRow({ hunt, index, onDelete, isDeleting, showCharacter, characterNa
         {/* Duration */}
         <div>
           <p className="text-sm text-gray-300">
-            {extractDuration(hunt.raw_log) || '—'}
+            {huntDuration || '—'}
           </p>
         </div>
 
@@ -495,14 +504,10 @@ function HuntRow({ hunt, index, onDelete, isDeleting, showCharacter, characterNa
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-gray-200 truncate">
-              {hunt.location || 'Sem local'}
+              {displayLocation}
             </p>
             <p className="text-xs text-gray-500 mt-0.5">
-              {hunt.hunt_date ? formatDate(hunt.hunt_date) : '—'}
-              {(() => {
-                const dur = extractDuration(hunt.raw_log)
-                return dur ? ` · ${dur}` : ''
-              })()}
+              {formatHuntSubtitle(hunt.hunt_date, huntDuration)}
             </p>
             {/* Character badge on mobile (only in 'all' mode) */}
             {showCharacter && (
@@ -560,17 +565,19 @@ function HuntRow({ hunt, index, onDelete, isDeleting, showCharacter, characterNa
  */
 function extractDuration(rawLog) {
   if (!rawLog) return null
-  const match = rawLog.match(/Session:\s*(.+)/i)
+  const match = rawLog.match(/Session:\s*([^\r\n]+)/i)
   if (match && !match[0].includes('Session data')) {
     return match[1].trim()
   }
   return null
 }
 
-function formatDate(dateStr) {
+function formatHuntSubtitle(dateStr, durationStr) {
+  if (!dateStr) return durationStr ? durationStr : '—'
   try {
     const date = new Date(dateStr)
-    return format(date, "dd MMM yyyy, HH:mm", { locale: ptBR })
+    const formattedDate = format(date, "dd MMM yyyy", { locale: ptBR })
+    return durationStr ? `${formattedDate} • ${durationStr}` : formattedDate
   } catch {
     return dateStr
   }

@@ -197,11 +197,17 @@ export default function HuntLog() {
 
     // Use extracted start date from log or fallback to current date/time
     const autoHuntDate = parsedData.session?.startDate || new Date().toISOString()
+    const autoDuration = parsedData.session?.duration || huntDurationStr || null
+
+    const huntLocation = location.trim()
+      ? location.trim()
+      : (parsedData.session?.lootType && parsedData.session.lootType !== 'Market' ? parsedData.session.lootType : 'Hunt Solo')
 
     const { error } = await createHunt({
       characterId: selectedCharId,
-      location: location || parsedData.session?.lootType || 'Unknown',
+      location: huntLocation,
       huntDate: autoHuntDate,
+      duration: autoDuration,
       totalLoot: parsedData.totals.loot,
       totalSupplies: adjustedSupplies,
       balance: adjustedBalance,

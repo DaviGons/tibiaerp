@@ -7,7 +7,7 @@ export function useHunts() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const createHunt = async ({ characterId, location, huntDate, totalLoot, totalSupplies, balance, rawLog }) => {
+  const createHunt = async ({ characterId, location, huntDate, duration, totalLoot, totalSupplies, balance, rawLog }) => {
     if (!user) {
       setError('Usuário não autenticado')
       return { data: null, error: 'Usuário não autenticado' }
@@ -22,14 +22,17 @@ export function useHunts() {
     setLoading(true)
     setError(null)
 
+    const finalLocation = location && location.trim() && location !== 'Unknown' ? location.trim() : 'Hunt Solo'
+
     try {
       const { data, error: insertError } = await supabase
         .from('hunts')
         .insert({
           profile_id: user.id,
           character_id: characterId,
-          location,
+          location: finalLocation,
           hunt_date: huntDate || new Date().toISOString(),
+          duration: duration || null,
           total_loot: totalLoot,
           total_supplies: totalSupplies,
           balance,
