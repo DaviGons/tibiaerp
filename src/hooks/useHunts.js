@@ -7,10 +7,16 @@ export function useHunts() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const createHunt = async ({ location, huntDate, totalLoot, totalSupplies, balance, rawLog }) => {
+  const createHunt = async ({ characterId, location, huntDate, totalLoot, totalSupplies, balance, rawLog }) => {
     if (!user) {
       setError('Usuário não autenticado')
       return { data: null, error: 'Usuário não autenticado' }
+    }
+
+    if (!characterId) {
+      const msg = 'Selecione um personagem antes de salvar a hunt.'
+      setError(msg)
+      return { data: null, error: msg }
     }
 
     setLoading(true)
@@ -21,6 +27,7 @@ export function useHunts() {
         .from('hunts')
         .insert({
           profile_id: user.id,
+          character_id: characterId,
           location,
           hunt_date: huntDate || new Date().toISOString(),
           total_loot: totalLoot,
@@ -43,17 +50,24 @@ export function useHunts() {
     }
   }
 
-  const fetchHunts = async (limit = 20, offset = 0) => {
+  const fetchHunts = async (limit = 20, offset = 0, characterId = null) => {
     if (!user) return { data: [], error: 'Usuário não autenticado' }
 
     setLoading(true)
     setError(null)
 
     try {
-      const { data, error: fetchError, count } = await supabase
+      let query = supabase
         .from('hunts')
         .select('*', { count: 'exact' })
         .eq('profile_id', user.id)
+
+      // Filter by character when provided; null = all hunts (cross-character view)
+      if (characterId) {
+        query = query.eq('character_id', characterId)
+      }
+
+      const { data, error: fetchError, count } = await query
         .order('hunt_date', { ascending: false })
         .range(offset, offset + limit - 1)
 

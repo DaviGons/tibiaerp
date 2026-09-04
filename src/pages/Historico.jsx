@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useHunts } from '../hooks/useHunts'
+import { useCharacter } from '../contexts/CharacterContext'
 import { formatGold } from '../utils/parseHuntLog'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -18,6 +19,8 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  User,
+  Users,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
@@ -25,6 +28,7 @@ const PAGE_SIZE = 15
 
 export default function Historico() {
   const { fetchHunts, deleteHunt, loading, error } = useHunts()
+  const { activeCharacterId, activeCharacter, characters } = useCharacter()
   const [hunts, setHunts] = useState([])
   const [totalCount, setTotalCount] = useState(0)
   const [currentPage, setCurrentPage] = useState(0)
@@ -33,14 +37,34 @@ export default function Historico() {
   const [deleteError, setDeleteError] = useState('')
   const [initialLoad, setInitialLoad] = useState(true)
 
+  // View mode: 'active' = filtered by active character, 'all' = all characters
+  const [viewMode, setViewMode] = useState('active')
+
+  // Build a lookup map for character names (avoids repeated .find calls per row)
+  const characterNameMap = useMemo(() => {
+    const map = {}
+    characters.forEach(c => { map[String(c.id)] = c.name })
+    return map
+  }, [characters])
+
+  // Determine the characterId to filter by based on view mode
+  const filterCharacterId = viewMode === 'active' ? activeCharacterId : null
+
   const loadHunts = useCallback(async (page = 0) => {
     const offset = page * PAGE_SIZE
-    const { data, count } = await fetchHunts(PAGE_SIZE, offset)
+    const { data, count } = await fetchHunts(PAGE_SIZE, offset, filterCharacterId)
     setHunts(data || [])
     setTotalCount(count || 0)
     setInitialLoad(false)
-  }, [fetchHunts])
+  }, [fetchHunts, filterCharacterId])
 
+  // Reload hunts when character or view mode changes — reset to page 0
+  useEffect(() => {
+    setCurrentPage(0)
+    loadHunts(0)
+  }, [filterCharacterId, viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reload on page change (separate from above to avoid double-fetching page 0)
   useEffect(() => {
     loadHunts(currentPage)
   }, [currentPage]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -82,15 +106,48 @@ export default function Historico() {
     setDeleteError('')
   }
 
+  // Subtitle text reflecting current filter mode
+  const subtitleText = viewMode === 'active' && activeCharacter
+    ? `Hunts de ${activeCharacter.name} (${totalCount} ${totalCount === 1 ? 'registro' : 'registros'})`
+    : `Todas as hunts registradas (${totalCount} ${totalCount === 1 ? 'registro' : 'registros'})`
+
   return (
     <div className="page-enter space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-100">Histórico</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Todas as hunts registradas ({totalCount} {totalCount === 1 ? 'registro' : 'registros'})
+            {subtitleText}
           </p>
+        </div>
+
+        {/* View mode toggle */}
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-tibia-deeper border border-tibia-border/60 self-start">
+          <button
+            onClick={() => setViewMode('active')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+              viewMode === 'active'
+                ? 'bg-tibia-gold/15 text-tibia-gold border border-tibia-gold/30'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-tibia-card border border-transparent'
+            }`}
+          >
+            <User className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Personagem Ativo</span>
+            <span className="sm:hidden">Ativo</span>
+          </button>
+          <button
+            onClick={() => setViewMode('all')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+              viewMode === 'all'
+                ? 'bg-tibia-gold/15 text-tibia-gold border border-tibia-gold/30'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-tibia-card border border-transparent'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Todos os Personagens</span>
+            <span className="sm:hidden">Todos</span>
+          </button>
         </div>
       </div>
 
@@ -106,7 +163,7 @@ export default function Historico() {
       )}
 
       {/* Table */}
-      <div className="glass-card overflow-hidden">
+      <div className="glass-card overflow-hidden relative">
         {loading && initialLoad ? (
           <div className="p-16 flex items-center justify-center">
             <Loader2 className="w-6 h-6 text-tibia-gold animate-spin" />
@@ -114,7 +171,11 @@ export default function Historico() {
         ) : hunts.length === 0 ? (
           <div className="p-16 text-center">
             <ScrollText className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-            <p className="text-sm text-gray-400 font-medium">Nenhuma hunt registrada</p>
+            <p className="text-sm text-gray-400 font-medium">
+              {viewMode === 'active' && activeCharacter
+                ? `Nenhuma hunt registrada para ${activeCharacter.name}`
+                : 'Nenhuma hunt registrada'}
+            </p>
             <p className="text-xs text-gray-500 mt-1">Comece registrando sua primeira hunt</p>
             <Link
               to="/hunt-log"
@@ -127,11 +188,21 @@ export default function Historico() {
         ) : (
           <>
             {/* Table header */}
-            <div className="hidden md:grid md:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_auto] gap-4 px-5 py-3 border-b border-tibia-border/50 bg-tibia-deeper/50">
+            <div className={`hidden md:grid gap-4 px-5 py-3 border-b border-tibia-border/50 bg-tibia-deeper/50 ${
+              viewMode === 'all'
+                ? 'md:grid-cols-[1.2fr_1fr_1fr_1fr_1fr_1fr_auto]'
+                : 'md:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_auto]'
+            }`}>
               <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
                 <Clock className="w-3.5 h-3.5" />
                 Data / Local
               </div>
+              {viewMode === 'all' && (
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  <User className="w-3.5 h-3.5" />
+                  Personagem
+                </div>
+              )}
               <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
                 <Clock className="w-3.5 h-3.5" />
                 Duração
@@ -160,6 +231,12 @@ export default function Historico() {
                   index={index}
                   onDelete={handleDeleteClick}
                   isDeleting={deleting && deleteTarget?.id === hunt.id}
+                  showCharacter={viewMode === 'all'}
+                  characterName={
+                    hunt.character_id
+                      ? (characterNameMap[String(hunt.character_id)] || 'Desconhecido')
+                      : null
+                  }
                 />
               ))}
             </div>
@@ -325,7 +402,7 @@ export default function Historico() {
   )
 }
 
-function HuntRow({ hunt, index, onDelete, isDeleting }) {
+function HuntRow({ hunt, index, onDelete, isDeleting, showCharacter, characterName }) {
   const balanceColor = hunt.balance >= 0 ? 'text-tibia-green' : 'text-tibia-red'
   const balanceBadge = hunt.balance >= 0 ? 'badge-profit' : 'badge-loss'
 
@@ -333,7 +410,11 @@ function HuntRow({ hunt, index, onDelete, isDeleting }) {
     <>
       {/* Desktop row */}
       <div
-        className="hidden md:grid md:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_auto] gap-4 px-5 py-3.5 hover:bg-tibia-card-hover/50 transition-colors items-center group"
+        className={`hidden md:grid gap-4 px-5 py-3.5 hover:bg-tibia-card-hover/50 transition-colors items-center group ${
+          showCharacter
+            ? 'md:grid-cols-[1.2fr_1fr_1fr_1fr_1fr_1fr_auto]'
+            : 'md:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_auto]'
+        }`}
         style={{ animationDelay: `${index * 30}ms` }}
       >
         {/* Date & Location */}
@@ -345,6 +426,21 @@ function HuntRow({ hunt, index, onDelete, isDeleting }) {
             {hunt.hunt_date ? formatDate(hunt.hunt_date) : '—'}
           </p>
         </div>
+
+        {/* Character column (only in 'all' mode) */}
+        {showCharacter && (
+          <div className="min-w-0">
+            {characterName ? (
+              <span className="text-xs font-medium text-gray-300 truncate block">
+                {characterName}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-700/50 border border-gray-600/50 text-[10px] text-gray-400 font-medium">
+                Sem personagem
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Duration */}
         <div>
@@ -408,6 +504,21 @@ function HuntRow({ hunt, index, onDelete, isDeleting }) {
                 return dur ? ` · ${dur}` : ''
               })()}
             </p>
+            {/* Character badge on mobile (only in 'all' mode) */}
+            {showCharacter && (
+              <p className="text-[10px] text-gray-400 mt-1">
+                {characterName ? (
+                  <span className="inline-flex items-center gap-1">
+                    <User className="w-3 h-3" />
+                    {characterName}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-700/50 border border-gray-600/50">
+                    Sem personagem
+                  </span>
+                )}
+              </p>
+            )}
           </div>
           <button
             onClick={() => onDelete(hunt)}

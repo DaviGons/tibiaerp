@@ -198,6 +198,7 @@ export default function HuntLog() {
     }
 
     const { error } = await createHunt({
+      characterId: selectedCharId,
       location: location || parsedData.session?.lootType || 'Unknown',
       huntDate: huntDate || new Date().toISOString(),
       totalLoot: parsedData.totals.loot,
